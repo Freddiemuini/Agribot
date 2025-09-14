@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AgriBot - Crop Disease Identification</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+  <div class="container mx-auto px-4 py-8 max-w-4xl">
+
+    <!-- Header -->
+    <header class="text-center mb-10">
+      <div class="inline-flex items-center mb-4">
+        <span class="text-3xl text-green-600 mr-2"><i class="fa-solid fa-leaf"></i></span>
+        <h1 class="text-3xl font-bold text-gray-800">AgriBot</h1>
+      </div>
+      <p class="text-gray-600">AI-powered crop disease diagnosis & weather insights</p>
+    </header>
+
+    <!-- LOGIN / SIGNUP / RESET -->
+    <div id="auth-container" class="bg-white rounded-lg shadow-lg p-6 mb-8">
+      <h2 class="text-xl font-bold text-gray-700 mb-4" id="auth-title">Login</h2>
+      
+      <!-- Auth Form -->
+      <form id="auth-form" class="space-y-4">
+        <input type="text" id="name" placeholder="Name" class="w-full px-3 py-2 border rounded-lg hidden">
+        <input type="email" id="email" placeholder="Email" class="w-full px-3 py-2 border rounded-lg" required>
+        <input type="password" id="password" placeholder="Password" class="w-full px-3 py-2 border rounded-lg" required>
+        <button type="submit" class="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition-colors">
+          Submit
+        </button>
+      </form>
+
+      <!-- Forgot Password -->
+      <p class="text-sm text-gray-600 mt-4 text-center">
+        <a href="#" id="forgot-password" class="text-blue-500">Forgot password?</a>
+      </p>
+
+      <!-- Toggle Login/Signup -->
+      <p class="text-sm text-gray-600 mt-2 text-center">
+        <span id="toggle-auth">Don’t have an account? <a href="#" class="text-blue-500">Sign up</a></span>
+      </p>
+
+      <!-- Reset Request Form -->
+      <form id="reset-request-form" class="space-y-4 hidden mt-4">
+        <input type="email" id="reset-email" placeholder="Enter your email" class="w-full px-3 py-2 border rounded-lg" required>
+        <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors">
+          Send Reset Link
+        </button>
+        <p class="text-sm text-gray-600 text-center">
+          <a href="#" id="back-to-login" class="text-green-500">Back to Login</a>
+        </p>
+      </form>
+
+      <!-- Reset Confirm Form -->
+      <form id="reset-confirm-form" class="space-y-4 hidden mt-4">
+        <input type="text" id="reset-token" placeholder="Paste your reset token" class="w-full px-3 py-2 border rounded-lg" required>
+        <input type="password" id="new-password" placeholder="New Password" class="w-full px-3 py-2 border rounded-lg" required>
+        <button type="submit" class="w-full bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700 transition-colors">
+          Reset Password
+        </button>
+        <p class="text-sm text-gray-600 text-center">
+          <a href="#" id="back-to-login-2" class="text-green-500">Back to Login</a>
+        </p>
+      </form>
+    </div>
+
+    <!-- APP CONTENT -->
+    <div id="app-container" class="bg-white rounded-lg shadow-lg p-6 mb-8 hidden">
+      <div class="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-2">
+        <p class="text-gray-600">
+          Welcome, <span id="user-name"></span> 🎉 (<span id="user-email"></span>)
+        </p>
+        <div class="flex gap-2">
+          <button id="logout-button" class="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">
+            Logout
+          </button>
+        </div>
+      </div>
+
+      <!-- File Upload -->
+      <div id="drop-zone" class="border-2 border-dashed border-green-600 rounded-lg p-6 text-center cursor-pointer mb-4">
+        <input type="file" id="fileInput" accept="image/*" class="hidden">
+        <p class="text-gray-500">Drag & drop or <span class="text-green-600 font-bold">browse</span> an image</p>
+      </div>
+      <div id="file-info" class="text-center text-gray-700 hidden"></div>
+
+      <!-- Analyze Button -->
+      <button id="analyze-button" class="w-full mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50" disabled>
+        Analyze
+      </button>
+
+      <!-- Results -->
+      <div id="results-view" class="hidden mt-6"></div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = "http://127.0.0.1:5000";
+    let isSignup = false;
+    let selectedFile = null;
+
+    const authContainer = document.getElementById("auth-container");
+    const appContainer = document.getElementById("app-container");
+    const toggleAuth = document.getElementById("toggle-auth");
+    const authForm = document.getElementById("auth-form");
+    const authTitle = document.getElementById("auth-title");
+    const nameInput = document.getElementById("name");
+    const emailInput = document.getElementById("email");
+    const passwordInput = document.getElementById("password");
+    const userNameSpan = document.getElementById("user-name");
+    const userEmailSpan = document.getElementById("user-email");
+    const logoutButton = document.getElementById("logout-button");
+
+    // Reset forms
+    const forgotPassword = document.getElementById("forgot-password");
+    const resetRequestForm = document.getElementById("reset-request-form");
+    const resetConfirmForm = document.getElementById("reset-confirm-form");
+    const resetEmail = document.getElementById("reset-email");
+    const resetToken = document.getElementById("reset-token");
+    const newPassword = document.getElementById("new-password");
+    const backToLogin = document.getElementById("back-to-login");
+    const backToLogin2 = document.getElementById("back-to-login-2");
+
+    const dropZone = document.getElementById("drop-zone");
+    const fileInput = document.getElementById("fileInput");
+    const fileInfo = document.getElementById("file-info");
+    const analyzeButton = document.getElementById("analyze-button");
+    const resultsView = document.getElementById("results-view");
+
+    // Toggle login/signup
+    toggleAuth.addEventListener("click", (e) => {
+      e.preventDefault();
+      isSignup = !isSignup;
+      if (isSignup) {
+        authTitle.textContent = "Sign Up";
+        nameInput.classList.remove("hidden");
+        toggleAuth.innerHTML = 'Already have an account? <a href="#" class="text-blue-500">Login</a>';
+      } else {
+        authTitle.textContent = "Login";
+        nameInput.classList.add("hidden");
+        toggleAuth.innerHTML = 'Don’t have an account? <a href="#" class="text-blue-500">Sign up</a>';
+      }
+    });
+
+    // Show reset request form
+    forgotPassword.addEventListener("click", (e) => {
+      e.preventDefault();
+      authForm.classList.add("hidden");
+      resetRequestForm.classList.remove("hidden");
+    });
+
+    // Back to login
+    backToLogin.addEventListener("click", (e) => {
+      e.preventDefault();
+      resetRequestForm.classList.add("hidden");
+      authForm.classList.remove("hidden");
+    });
+    backToLogin2.addEventListener("click", (e) => {
+      e.preventDefault();
+      resetConfirmForm.classList.add("hidden");
+      authForm.classList.remove("hidden");
+    });
+
+    // Handle login/signup
+    authForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const endpoint = isSignup ? "/signup" : "/login";
+      const body = {
+        email: emailInput.value,
+        password: passwordInput.value
+      };
+      if (isSignup) body.name = nameInput.value;
+
+      try {
+        const res = await fetch(API_BASE + endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || "Auth failed");
+
+        if (!isSignup) {
+          localStorage.setItem("token", data.access_token);
+          localStorage.setItem("user", JSON.stringify(data.user));
+          userNameSpan.textContent = data.user.name;
+          userEmailSpan.textContent = data.user.email;
+          authContainer.classList.add("hidden");
+          appContainer.classList.remove("hidden");
+        } else {
+          alert("Signup successful 🎉! Please login.");
+          toggleAuth.click();
+        }
+      } catch (err) {
+        console.error("Auth Error:", err);
+        alert("Error: " + err.message);
+      }
+    });
+
+    // Reset request form submit
+    resetRequestForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      try {
+        const res = await fetch(API_BASE + "/reset-password-request", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: resetEmail.value })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Request failed");
+        alert("📩 Reset link sent! Check your email.");
+        resetRequestForm.classList.add("hidden");
+        resetConfirmForm.classList.remove("hidden");
+      } catch (err) {
+        alert("Error: " + err.message);
+      }
+    });
+
+    // Reset confirm form submit
+    resetConfirmForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      try {
+        const res = await fetch(API_BASE + "/reset-password-confirm/" + resetToken.value, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ new_password: newPassword.value })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Reset failed");
+        alert("✅ Password reset successful! You can login now.");
+        resetConfirmForm.classList.add("hidden");
+        authForm.classList.remove("hidden");
+      } catch (err) {
+        alert("Error: " + err.message);
+      }
+    });
+
+    // Logout
+    logoutButton.addEventListener("click", () => {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      appContainer.classList.add("hidden");
+      authContainer.classList.remove("hidden");
+    });
+
+    // File upload
+    dropZone.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", (e) => handleFile(e.target.files[0]));
+    dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("bg-green-50"); });
+    dropZone.addEventListener("dragleave", () => dropZone.classList.remove("bg-green-50"));
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("bg-green-50");
+      if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+    });
+
+    function handleFile(file) {
+      if (!file.type.startsWith("image/")) {
+        alert("Please upload an image file.");
+        return;
+      }
+      selectedFile = file;
+      fileInfo.textContent = `Selected file: ${file.name}`;
+      fileInfo.classList.remove("hidden");
+      analyzeButton.disabled = false;
+    }
+
+    // ✅ FIXED Analyze button
+    analyzeButton.addEventListener("click", async () => {
+      if (!selectedFile) return alert("Please upload an image");
+
+      const location = prompt("Enter location (e.g., Nairobi):", "Nairobi");
+      if (!location) return alert("Location is required");
+
+      let lat, lon;
+      try {
+        const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}`);
+        const geoData = await geoRes.json();
+        if (!geoData.length) throw new Error("Location not found");
+        lat = geoData[0].lat;
+        lon = geoData[0].lon;
+      } catch (err) {
+        return alert("Error getting coordinates: " + err.message);
+      }
+
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+      formData.append("lat", lat);
+      formData.append("lon", lon);
+
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch(API_BASE + "/analyze", {
+          method: "POST",
+          headers: {
+            "Authorization": "Bearer " + token
+            // ❌ do NOT set Content-Type when using FormData
+          },
+          body: formData
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Analysis failed");
+
+        resultsView.classList.remove("hidden");
+        resultsView.innerHTML = `
+          <h2 class="text-xl font-bold text-green-700 mb-2">Detected Crop</h2>
+          <p><strong>English Name:</strong> ${data.cropEnglishName || "Unknown"}</p>
+          <p><strong>Scientific Name:</strong> <em>${data.cropScientificName || "Unknown"}</em></p>
+
+          <h3 class="text-lg font-semibold text-red-600 mt-4 mb-2">Disease: ${data.diseaseName}</h3>
+          <p class="mb-2">${data.diseaseDescription}</p>
+
+          <h3 class="text-lg font-semibold text-blue-700 mt-4 mb-2">Prevention</h3>
+          <p class="mb-2">${(data.prevention && data.prevention.join(", ")) || "No prevention tips available"}</p>
+
+          <h3 class="text-lg font-semibold text-orange-600 mt-4 mb-2">Cure</h3>
+          <p class="mb-2">${data.cure || "No cure info available"}</p>
+
+          <h3 class="text-lg font-semibold text-green-700 mt-4 mb-2">Recommendations</h3>
+          <p class="mb-2">${data.recommendation || "No recommendations available"}</p>
+
+          <h3 class="text-lg font-semibold text-gray-700 mt-4 mb-2">Weather Info</h3>
+          <p><strong>Weather:</strong> ${data.weather}</p>
+          <p><strong>Temperature:</strong> ${data.temperature_celsius}°C</p>
+        `;
+      } catch (err) {
+        alert("Error: " + err.message);
+      }
+    });
+
+    // Auto login if token exists
+    window.onload = () => {
+      const user = JSON.parse(localStorage.getItem("user") || "null");
+      if (user) {
+        userNameSpan.textContent = user.name;
+        userEmailSpan.textContent = user.email;
+        authContainer.classList.add("hidden");
+        appContainer.classList.remove("hidden");
+      }
+    };
+  </script>
+</body>
+</html>
